@@ -42,7 +42,7 @@ reg [31:0] PC_curr;
 
 // Instantiate alu, decoder, mem_access and regfile
 alu32 u_alu (
-  .op(alu_op),    //in
+  .code(alu_op),    //in
   .rv1(rv1),   //in
   .rv2(rv2),   //in
   .rvout(rvout)  //out
@@ -72,7 +72,7 @@ regfile u_reg(
 
 control u_ls(
   .op(op),  // in
-  .r_rv2(r_rv2), //in- used in case of store operations
+  .rs2_val(r_rv2), //in- used in case of store operations
   .drdata(drdata),  //in
   .rvout(rvout),  //in
   .imm_val(imm_val),    //in

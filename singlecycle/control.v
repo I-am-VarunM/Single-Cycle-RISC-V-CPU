@@ -1,6 +1,5 @@
 /*
   Author: VARUN M- EE20B149
-
   Single Cycle CPU Implementation- ALU, Load and Store, Branching Instructions for RV32I ISA Control module
   Description:  Implement Load and Store Instructions
                 Set PC_next (address of next instr in IMEM):
@@ -12,7 +11,7 @@
 
 module control(
   input [5:0] op,             // 6-bit op from decoder
-  input [31:0] r_rv2,         // value at rs2 register in regfile (used in case of store instructions)
+  input [31:0] rs2_val,         // value at rs2 register in regfile (used in case of store instructions)
   input [31:0] drdata,        // Data read from DMEM
   input [31:0] rvout,         // ALU output, used for Daddr calculation in Load and Store and Iaddr calc in Branch
   input [31:0] imm_val,       // immediate used for PC increment (conditional branch & JAL), and for AUIPC, LUI
@@ -47,7 +46,7 @@ reg rwe;
            in case of Load/Store Operation, daddr = rvout;
 */
 
-always @(op or drdata or rvout or r_rv2 or imm_val or PC_curr) begin
+always @(op or drdata or rvout or rs2_val or imm_val or PC_curr) begin
  PC_next = PC_curr + 4;   // default: Increment PC by 4, write disabled
  dwe = 4'b0;
  rwe = 0;
@@ -69,6 +68,7 @@ always @(op or drdata or rvout or r_rv2 or imm_val or PC_curr) begin
                         2'b11:  reg_wdata = {{24{drdata[31]}}, drdata[31:24]};//Byte 3
                       endcase
                     end               //LB
+//Load Half Word
       6'b010001 :   begin
                     rwe = 1;
 
@@ -76,13 +76,15 @@ always @(op or drdata or rvout or r_rv2 or imm_val or PC_curr) begin
                         2'b00:  reg_wdata = {{16{drdata[15]}}, drdata[15:0]}; //HW 0
                         2'b10:  reg_wdata = {{16{drdata[31]}}, drdata[31:16]};//HW 1
                       endcase
-                    end             //LH
+                    end             //LH 
+//Load Word
       6'b010010 :   begin
                     rwe = 1;
                       case(daddr[1:0])    // last two bits of address indicate the byte to be addressed
                         2'b00:  reg_wdata = drdata;
                       endcase
                     end           //LW
+
       6'b010100 :   begin
                     rwe = 1;
                       case(daddr[1:0])    // last two bits of address indicate the byte to be addressed
@@ -92,6 +94,7 @@ always @(op or drdata or rvout or r_rv2 or imm_val or PC_curr) begin
                         2'b11:  reg_wdata = {24'b0, drdata[31:24]}; //Byte 3
                       endcase
                     end         //LBU
+
       6'b010101 :   begin
                     rwe = 1;
                       case(daddr[1:0])    // last two bits of address indicate the byte to be addressed
@@ -99,57 +102,68 @@ always @(op or drdata or rvout or r_rv2 or imm_val or PC_curr) begin
                         2'b10:  reg_wdata = {16'b0, drdata[31:16]};//HW 1
                       endcase
                     end         //LHU
+
       6'b110000 :  begin
                     case(daddr[1:0])
                       2'b00:  begin dwe = 4'b0001;
-                              dwdata = r_rv2; end
+                              dwdata = rs2_val; end
                       2'b01:  begin dwe = 4'b0010;
-                              dwdata = {r_rv2<<8}; end
+                              dwdata = {rs2_val<<8}; end
                       2'b10:  begin dwe = 4'b0100;
-                              dwdata = {r_rv2<<16}; end
+                              dwdata = {rs2_val<<16}; end
                       2'b11:  begin dwe = 4'b1000;
-                              dwdata = {r_rv2<<24}; end
+                              dwdata = {rs2_val<<24}; end
                     endcase
                     end         //SB
+
       6'b110001 :  begin
                     case(daddr[1:0])
                       2'b00:  begin dwe = 4'b0011;
-                              dwdata = r_rv2; end
+                              dwdata = rs2_val; end
                       2'b10:  begin dwe = 4'b1100;
-                              dwdata = {r_rv2<<16}; end
+                              dwdata = {rs2_val<<16}; end
                     endcase
                     end     //SH
+
       6'b110010 :   begin
                     case(daddr[1:0])
                       2'b00:  begin dwe = 4'b1111;
-                              dwdata = r_rv2; end
+                              dwdata = rs2_val; end
                     endcase
                     end     //SW
+
 
     endcase
   end // end else
   else if (op[5:3] == 3'b100) begin   // Conditional Branch
     case (op[2:0])
+    //BEQ and BNE needs alu operation subtraction as they need to check if two given numbers are equal or not
+    //branch if equal
       3'b000 : begin
                 alu_op = 6'b111000; //op(SUB)
                 if (rvout == 0)  PC_next = PC_curr + imm_val;
                end   //BEQ
+    //Branch if unequal
       3'b001 : begin
                 alu_op = 6'b111000; //op(SUB)
                 if (rvout != 0) PC_next = PC_curr + imm_val;
                end    //BNE
+    //The blt instruction compares 2 registers, treating them as signed integers, and takes a branch if one register is less than another. 
       3'b100 : begin
                 alu_op = 6'b101010; //op(SLT)
                 if (rvout[0])  PC_next = PC_curr + imm_val;
                end    //BLT
+    // Branch on Greater than or Equal
       3'b101 : begin
                 alu_op = 6'b101010; //op(SLT)
                 if (!rvout[0]) PC_next = PC_curr + imm_val;
                end    //BGE
+    //Unsigned BLT
       3'b110 : begin
                 alu_op = 6'b101011; //op(SLTU)
                 if (rvout[0])  PC_next = PC_curr + imm_val;
                end    //BLTU
+    //Unsigned SLTU
       3'b111 : begin
                 alu_op = 6'b101011; //op(SLTU)
                 if (!rvout[0]) PC_next = PC_curr + imm_val;
